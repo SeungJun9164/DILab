@@ -48,14 +48,16 @@ def parse_data(data:dict) -> list:
     
     data = data['data']
     qa_list = []
-    
+
     for paragraphs in data:
+
         for para in paragraphs['paragraphs']:
-            cntext = para['context']
-            
+            context = para['context']
+
             for qa in para['qas']:
-                id = eq['id']
-                question = qe['question']
+                
+                id = qa['id']
+                question = qa['question']
                 
                 for ans in qa['answers']:
                     answer = ans['text']
@@ -67,10 +69,11 @@ def parse_data(data:dict) -> list:
                     qa_dict['context'] = context
                     qa_dict['question'] = question
                     qa_dict['label'] = [ans_start, ans_end]
-                    
-                    eq_dict['answer'] = answer
-                    qa_list.append(qa_dict)
-                    
+
+                    qa_dict['answer'] = answer
+                    qa_list.append(qa_dict)    
+
+    
     return qa_list
 
 
@@ -248,7 +251,7 @@ def test_indices(df, idx2word):
     for index, row in df.iterrows():
         
         answer_tokens = [w.text for w in nlp(row['answer'], disable=['parser',' tagger', 'ner'])]
-        start_token = nswer_tokens[0]
+        start_token = answer_tokens[0]
         end_token = answer_tokens[-1]
         
         context_span = [(word.idx, word.idx + len(word.text))
@@ -280,7 +283,7 @@ def get_error_indices(df, idx2word):
     test_indices함수에서 오류를 가져와 에러 반환
     """
     
-    start_value_error, end_value_error, assert_error = test_indices(df)
+    start_value_error, end_value_error, assert_error = test_indices(df, idx2word)
     err_idx = start_value_error + end_value_error + assert_error
     err_idx = set(err_idx)
     print(f'Error indices: {len(err_idx)}')
