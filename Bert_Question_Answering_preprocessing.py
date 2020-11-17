@@ -24,6 +24,10 @@ nlp = spacy.load('en')
 
 
 def load_json(path):
+    '''
+    Loads the JSON file of the Squad dataset.
+    Returns the json object of the dataset.
+    '''
     with open(path, 'r', encoding='utf-8') as f:
         data = json.load(f)
         
@@ -36,7 +40,7 @@ def load_json(path):
 
 # ![image.png](attachment:image.png)
 
-# In[3]:
+# In[1]:
 
 
 def parse_data(data:dict) -> list:
@@ -91,20 +95,20 @@ def filter_large_examples(df):
     query_lens = []
     ans_lens = []
     for index, row in df.iterrows():
-        cts_tokens = [w.text for w in nlp(row.cntext, disable=['parser', 'ner', 'tagger'])]
-        if len(ctx_tokens) > 400:
+        ctx_tokens = [w.text for w in nlp(row.context, disable=['parser','ner','tagger'])]
+        if len(ctx_tokens)>400:
             ctx_lens.append(row.name)
-            
-        query_tokens = [w.text for w in nlp(row.question, disable=['parser', 'tagger', 'ner'])]
-        if len(query_tokens) > 50:
-            query_lens.append(row.name)
-            
-        ans_tokens = [w.text for w in nlp(row.answer, disable=['parser', 'tagger', 'ner'])]
-        if len(ans_tokens) > 30:
-            ans_lens.append(row.name)
-            
-        assert row.name == index
 
+        query_tokens = [w.text for w in nlp(row.question, disable=['parser','tagger','ner'])]
+        if len(query_tokens)>50:
+            query_lens.append(row.name)
+
+        ans_tokens = [w.text for w in nlp(row.answer, disable=['parser','tagger','ner'])]
+        if len(ans_tokens)>30:
+            ans_lens.append(row.name)
+
+        assert row.name == index
+    
     return set(ans_lens + ctx_lens + query_lens)
 
 
@@ -126,7 +130,7 @@ def gather_text_for_vocab(dfs:list):
         unique_questions = list(df.question.unique())
         total += df.context.nunique() + df.question.nunique()
         text.extend(unique_contexts + unique_questions)
-        
+    
     assert len(text) == total
     
     return text
@@ -148,12 +152,13 @@ def build_word_vocab(vocab_text):
     
     words = []
     for sent in vocab_text:
-        for word in nlp(sent, disable=['parser', 'tagger', 'ner']):
+        for word in nlp(sent, disable=['parser','tagger','ner']):
             words.append(word.text)
-            
+
     word_counter = Counter(words)
     word_vocab = sorted(word_counter, key=word_counter.get, reverse=True)
     print(f"raw-vocab: {len(word_vocab)}")
+    #word_vocab = list(set(word_vocab).intersection(set(glove_words)))
     print(f"glove-vocab: {len(word_vocab)}")
     word_vocab.insert(0, '<unk>')
     word_vocab.insert(1, '<pad>')
@@ -166,7 +171,7 @@ def build_word_vocab(vocab_text):
     return word2idx, idx2word, word_vocab
 
 
-# In[8]:
+# In[7]:
 
 
 def build_char_vocab(vocab_text):
@@ -198,7 +203,7 @@ def build_char_vocab(vocab_text):
     return char2idx, char_vocab
 
 
-# In[9]:
+# In[8]:
 
 
 def context_to_ids(text, word2idx):
@@ -230,7 +235,7 @@ def question_to_ids(text, word2idx):
     return question_ids
 
 
-# In[10]:
+# In[9]:
 
 
 def test_indices(df, idx2word):
@@ -249,33 +254,39 @@ def test_indices(df, idx2word):
     end_value_error = []
     assert_error = []
     for index, row in df.iterrows():
-        
-        answer_tokens = [w.text for w in nlp(row['answer'], disable=['parser',' tagger', 'ner'])]
+
+        answer_tokens = [w.text for w in nlp(row['answer'], disable=['parser','tagger','ner'])]
+
         start_token = answer_tokens[0]
         end_token = answer_tokens[-1]
         
-        context_span = [(word.idx, word.idx + len(word.text))
-                       for word in nlp(row['context'], disable=['parser', 'tagger', 'ner'])]
-        
+        context_span  = [(word.idx, word.idx + len(word.text)) 
+                         for word in nlp(row['context'], disable=['parser','tagger','ner'])]
+
         starts, ends = zip(*context_span)
-        
+
         answer_start, answer_end = row['label']
-        
+
         try:
             start_idx = starts.index(answer_start)
         except:
             start_value_error.append(index)
-        
+        try:
+            end_idx  = ends.index(answer_end)
+        except:
+            end_value_error.append(index)
+
         try:
             assert idx2word[row['context_ids'][start_idx]] == answer_tokens[0]
             assert idx2word[row['context_ids'][end_idx]] == answer_tokens[-1]
         except:
             assert_error.append(index)
-            
+
+
     return start_value_error, end_value_error, assert_error
 
 
-# In[11]:
+# In[10]:
 
 
 def get_error_indices(df, idx2word):
@@ -286,12 +297,12 @@ def get_error_indices(df, idx2word):
     start_value_error, end_value_error, assert_error = test_indices(df, idx2word)
     err_idx = start_value_error + end_value_error + assert_error
     err_idx = set(err_idx)
-    print(f'Error indices: {len(err_idx)}')
+    print(f"Error indices: {len(err_idx)}")
     
     return err_idx
 
 
-# In[12]:
+# In[11]:
 
 
 def index_answer(row, idx2word):
@@ -300,26 +311,19 @@ def index_answer(row, idx2word):
     answer의 시작 및 끝 위치의 튜플을 반환합니다.
     """
     
-    context_span = [(word.idx, word.idx + len(word.text)) 
-                    for word in nlp(row.context, disable=['parser', 'tagger', 'ner'])]
+    context_span = [(word.idx, word.idx + len(word.text)) for word in nlp(row.context, disable=['parser','tagger','ner'])]
     starts, ends = zip(*context_span)
     
     answer_start, answer_end = row.label
     start_idx = starts.index(answer_start)
+ 
+    end_idx  = ends.index(answer_end)
     
-    end_idx = ends.index(answer_end)
-    
-    ans_toks = [w.text for w in nlp(row.answer, disable=['parser', 'tagger', 'ner'])]
-    ans_start = ans_tokns[0]
+    ans_toks = [w.text for w in nlp(row.answer,disable=['parser','tagger','ner'])]
+    ans_start = ans_toks[0]
     ans_end = ans_toks[-1]
     assert idx2word[row.context_ids[start_idx]] == ans_start
     assert idx2word[row.context_ids[end_idx]] == ans_end
     
     return [start_idx, end_idx]
-
-
-# In[ ]:
-
-
-
 
